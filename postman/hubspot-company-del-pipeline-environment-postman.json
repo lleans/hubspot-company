@@ -1,0 +1,93 @@
+{
+	"id": "12345678-90ab-cdef-1234-567890abcdef",
+	"name": "HubSpot Company Deal Pipeline Environment",
+	"values": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3012",
+			"type": "default",
+			"enabled": true,
+			"description": "Base URL for the HubSpot extraction service API"
+		},
+		{
+			"key": "hubspot_api_token",
+			"value": "your_hubspot_api_token_here",
+			"type": "secret",
+			"enabled": true,
+			"description": "HubSpot API token for authentication. Get this from your HubSpot developer account."
+		},
+		{
+			"key": "job_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Current extraction job ID (automatically set by requests)"
+		},
+		{
+			"key": "connection_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Connection identifier for the current extraction job"
+		},
+		{
+			"key": "test_connection_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Test connection ID generated automatically for testing"
+		},
+		{
+			"key": "workflow_connection_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Connection ID for workflow testing"
+		},
+		{
+			"key": "workflow_job_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Job ID for workflow testing"
+		},
+		{
+			"key": "extraction_status",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Current status of the extraction job"
+		},
+		{
+			"key": "extraction_progress",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "Current progress percentage of the extraction job"
+		},
+		{
+			"key": "api_timeout",
+			"value": "30000",
+			"type": "default",
+			"enabled": true,
+			"description": "API request timeout in milliseconds"
+		},
+		{
+			"key": "max_retries",
+			"value": "3",
+			"type": "default",
+			"enabled": true,
+			"description": "Maximum number of retries for failed requests"
+		},
+		{
+			"key": "polling_interval",
+			"value": "5000",
+			"type": "default",
+			"enabled": true,
+			"description": "Interval in milliseconds for polling job status"
+		}
+	],
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2024-12-27T10:00:00.000Z",
+	"_postman_exported_using": "Postman/10.20.0"
+}

@@ -1,0 +1,384 @@
+name: hubspot-company-extraction-service
+services:
+  # DEVELOPMENT ENVIRONMENT
+  db:
+    image: postgres:15-alpine
+    container_name: hubspot_extraction_db_dev
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: hubspot_dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5441:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - hubspot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d hubspot_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - dev
+
+  # SHARED REDIS SERVICE FOR ALL ENVIRONMENTS
+  redis:
+    image: redis:7-alpine
+    container_name: hubspot_extraction_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - hubspot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    # No profile - always runs
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    container_name: hubspot_extraction_app_dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: development
+      LOG_LEVEL: DEBUG
+      PORT: 4045
+      PYTHONPATH: /app
+      DEV_DATABASE_URL: postgresql://user:password@db:5432/hubspot_dev
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "4045:4045"
+    volumes:
+      - ..:/app
+      - /app/venv  # Exclude virtual environment
+      - dev_logs:/app/logs
+    networks:
+      - hubspot-network
+    restart: unless-stopped
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - dev
+
+  # STAGING ENVIRONMENT
+  db_stage:
+    image: postgres:15-alpine
+    container_name: hubspot_extraction_db_stage
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stage_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stage_password}
+      POSTGRES_DB: ${POSTGRES_DB:-hubspot_stage}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_stage_data:/var/lib/postgresql/data
+      - ./backups:/backups/stage
+    networks:
+      - hubspot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stage_user} -d ${POSTGRES_DB:-hubspot_stage}"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.8'
+        reservations:
+          memory: 256M
+          cpus: '0.2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "25m"
+        max-file: "5"
+    command: |
+      postgres
+        -c max_connections=150
+        -c shared_buffers=192MB
+        -c effective_cache_size=576MB
+        -c maintenance_work_mem=48MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+    profiles:
+      - stage
+
+  app_stage:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.staging
+    container_name: hubspot_extraction_app_stage
+    depends_on:
+      db_stage:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - FLASK_ENV=staging
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-stage_user}:${POSTGRES_PASSWORD:-stage_password}@db_stage:5432/${POSTGRES_DB:-hubspot_stage}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PORT=5104
+      - SECRET_KEY=${SECRET_KEY:-stage_secret_key_change_in_production}
+      - MAX_WORKER_THREADS=${MAX_WORKER_THREADS:-8}
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+    ports:
+      - "5104:5104"
+    volumes:
+      - app_stage_logs:/app/logs
+      - app_stage_data:/app/data
+    networks:
+      - hubspot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5104/scan/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '1.5'
+        reservations:
+          memory: 256M
+          cpus: '0.3'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    profiles:
+      - stage
+
+  # PRODUCTION ENVIRONMENT
+  db_prod:
+    image: postgres:15-alpine
+    container_name: hubspot_extraction_db_prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - hubspot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    command: |
+      postgres
+        -c max_connections=200
+        -c shared_buffers=256MB
+        -c effective_cache_size=1GB
+        -c maintenance_work_mem=64MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+    profiles:
+      - prod
+
+  app_prod:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+    container_name: hubspot_extraction_app_prod
+    depends_on:
+      db_prod:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db_prod:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
+      - PORT=3012
+      - SECRET_KEY=${SECRET_KEY}
+      - MAX_WORKER_THREADS=${MAX_WORKER_THREADS:-5}
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+    ports:
+      - "3012:3012"
+    volumes:
+      - app_logs:/app/logs
+      - app_data:/app/data
+    networks:
+      - hubspot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3012/scan/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    profiles:
+      - prod
+
+  # TEST ENVIRONMENT
+  test_db:
+    image: postgres:15-alpine
+    container_name: hubspot_extraction_test_db_isolated
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    profiles:
+      - test
+
+  test_all:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    container_name: hubspot_extraction_test_all
+    command: ["pytest", "tests/", "-v", "--tb=short", "--cov=.", "--cov-report=html", "--cov-report=term", "--cov-report=xml", "--junitxml=/app/test-results/junit.xml"]
+    environment:
+      - FLASK_ENV=testing
+      - DATABASE_URL=postgresql://test_user:test_password@test_db:5432/test_db
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    depends_on:
+      test_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ..:/app
+      - test_coverage:/app/htmlcov
+      - test_results:/app/test-results
+    networks:
+      - hubspot-network
+      - test-network
+    profiles:
+      - test
+
+volumes:
+  # Development volumes
+  postgres_dev_data:
+  dev_logs:
+  
+  # Staging volumes
+  postgres_stage_data:
+  app_stage_logs:
+  app_stage_data:
+  
+  # Production volumes
+  postgres_data:
+  app_logs:
+  app_data:
+  
+  # Shared volumes
+  redis_data:
+  
+  # Test volumes
+  test_postgres_data:
+  test_coverage:
+  test_results:
+
+networks:
+  hubspot-network:
+    driver: bridge
+  test-network:
+    driver: bridge

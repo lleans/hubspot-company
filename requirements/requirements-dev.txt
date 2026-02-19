@@ -1,0 +1,9 @@
+-r requirements-prod.txt
+pytest==7.4.0
+pytest-cov==4.1.0
+pytest-mock==3.11.1
+pytest-flask==1.2.0
+black==23.7.0
+flake8==6.0.0
+pre-commit==3.3.3
+factory-boy==3.3.0

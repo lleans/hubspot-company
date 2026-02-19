@@ -1,0 +1,807 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-123456789012",
+		"name": "HubSpot Company Deal Pipeline Extraction API",
+		"description": "Complete API collection for HubSpot data extraction service including companies, deals, and pipelines extraction with comprehensive job management.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "Health & System",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has health status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('service');",
+									"    pm.expect(jsonData).to.have.property('checks');",
+									"});",
+									"",
+									"pm.test(\"Service is healthy\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.be.oneOf(['healthy', 'degraded']);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Thread Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has thread information\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('threads');",
+									"    pm.expect(jsonData).to.have.property('total_threads');",
+									"    pm.expect(jsonData).to.have.property('active_extractions');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/system/threads",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"system",
+								"threads"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Extraction Management",
+			"item": [
+				{
+					"name": "Start Extraction",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 202\", function () {",
+									"    pm.response.to.have.status(202);",
+									"});",
+									"",
+									"pm.test(\"Response contains job_id\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('job_id');",
+									"    pm.expect(jsonData).to.have.property('connection_id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    ",
+									"    // Store job_id for subsequent requests",
+									"    pm.environment.set('job_id', jsonData.job_id);",
+									"    pm.environment.set('connection_id', jsonData.connection_id);",
+									"});",
+									"",
+									"pm.test(\"Job status is started\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('started');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate unique connection_id for this test run",
+									"const timestamp = Date.now();",
+									"const randomId = Math.random().toString(36).substring(2, 8);",
+									"const connectionId = `test_connection_${timestamp}_${randomId}`;",
+									"pm.environment.set('test_connection_id', connectionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"connection_id\": \"{{test_connection_id}}\",\n    \"token\": \"{{hubspot_api_token}}\",\n    \"config\": {\n        \"extract_companies\": true,\n        \"extract_deals\": true,\n        \"extract_pipelines\": true,\n        \"batch_size\": 100\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/scan/start",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"start"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Extraction Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains job status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('connection_id');",
+									"    pm.expect(jsonData).to.have.property('progress_percentage');",
+									"});",
+									"",
+									"pm.test(\"Status is valid\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    const validStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled'];",
+									"    pm.expect(validStatuses).to.include(jsonData.status);",
+									"});",
+									"",
+									"// Store completion status for conditional execution",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set('extraction_status', jsonData.status);",
+									"pm.environment.set('extraction_progress', jsonData.progress_percentage);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/scan/status/{{job_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"status",
+								"{{job_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Extraction Results",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Response contains extraction results\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property('job_id');",
+									"        pm.expect(jsonData).to.have.property('connection_id');",
+									"        pm.expect(jsonData).to.have.property('status');",
+									"        pm.expect(jsonData).to.have.property('extraction_metadata');",
+									"        pm.expect(jsonData).to.have.property('companies');",
+									"        pm.expect(jsonData).to.have.property('deals');",
+									"        pm.expect(jsonData).to.have.property('pipelines');",
+									"    });",
+									"    ",
+									"    pm.test(\"Results contain data arrays\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.companies).to.be.an('array');",
+									"        pm.expect(jsonData.deals).to.be.an('array');",
+									"        pm.expect(jsonData.pipelines).to.be.an('array');",
+									"    });",
+									"    ",
+									"    pm.test(\"Extraction metadata is present\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.extraction_metadata).to.have.property('total_records');",
+									"        pm.expect(jsonData.extraction_metadata).to.have.property('companies_count');",
+									"        pm.expect(jsonData.extraction_metadata).to.have.property('deals_count');",
+									"        pm.expect(jsonData.extraction_metadata).to.have.property('pipelines_count');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/scan/result/{{job_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"result",
+								"{{job_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Extraction",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Cancellation response is valid\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property('job_id');",
+									"        pm.expect(jsonData).to.have.property('status');",
+									"        pm.expect(jsonData).to.have.property('message');",
+									"        pm.expect(jsonData.status).to.eql('cancelled');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/scan/{{job_id}}/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"{{job_id}}",
+								"cancel"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Extraction Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Deletion response is valid\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property('job_id');",
+									"        pm.expect(jsonData).to.have.property('message');",
+									"        pm.expect(jsonData.message).to.include('deleted successfully');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/scan/remove/{{job_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"remove",
+								"{{job_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Error Scenarios",
+			"item": [
+				{
+					"name": "Start Extraction - Invalid Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401\", function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"pm.test(\"Error response format\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"connection_id\": \"test_invalid_token\",\n    \"token\": \"invalid_token_12345\",\n    \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/scan/start",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"start"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start Extraction - Missing Required Fields",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Validation error response\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"    pm.expect(jsonData.message).to.include('Validation failed');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"connection_id\": \"test_missing_token\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/scan/start",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"start"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Status - Non-existent Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});",
+									"",
+									"pm.test(\"Not found error response\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"    pm.expect(jsonData.message).to.include('not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/scan/status/non-existent-job-id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"status",
+								"non-existent-job-id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start Extraction - Duplicate Connection ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 409 or 202\", function () {",
+									"    // 409 if duplicate active job exists, 202 if previous job was completed",
+									"    pm.expect(pm.response.code).to.be.oneOf([409, 202]);",
+									"});",
+									"",
+									"if (pm.response.code === 409) {",
+									"    pm.test(\"Conflict error response\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property('message');",
+									"        pm.expect(jsonData.message).to.include('already exists');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"connection_id\": \"{{test_connection_id}}\",\n    \"token\": \"{{hubspot_api_token}}\",\n    \"config\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/scan/start",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"scan",
+								"start"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Workflow Tests",
+			"item": [
+				{
+					"name": "Complete Extraction Workflow",
+					"item": [
+						{
+							"name": "1. Start New Extraction",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Generate unique connection_id for workflow test",
+											"const timestamp = Date.now();",
+											"const randomId = Math.random().toString(36).substring(2, 8);",
+											"const connectionId = `workflow_test_${timestamp}_${randomId}`;",
+											"pm.environment.set('workflow_connection_id', connectionId);"
+										],
+										"type": "text/javascript"
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Extraction started successfully\", function () {",
+											"    pm.response.to.have.status(202);",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set('workflow_job_id', jsonData.job_id);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"connection_id\": \"{{workflow_connection_id}}\",\n    \"token\": \"{{hubspot_api_token}}\",\n    \"config\": {\n        \"extract_companies\": true,\n        \"extract_deals\": true,\n        \"extract_pipelines\": true\n    }\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/scan/start",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"scan",
+										"start"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "2. Monitor Progress",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status check successful\", function () {",
+											"    pm.response.to.have.status(200);",
+											"});",
+											"",
+											"var jsonData = pm.response.json();",
+											"console.log(`Job Status: ${jsonData.status}, Progress: ${jsonData.progress_percentage}%`);",
+											"",
+											"// Continue monitoring if not completed",
+											"if (jsonData.status === 'running' || jsonData.status === 'pending') {",
+											"    pm.test(\"Job is in progress\", function () {",
+											"        pm.expect(['running', 'pending']).to.include(jsonData.status);",
+											"    });",
+											"} else if (jsonData.status === 'completed') {",
+											"    pm.test(\"Job completed successfully\", function () {",
+											"        pm.expect(jsonData.status).to.eql('completed');",
+											"        pm.expect(jsonData.progress_percentage).to.eql(100);",
+											"    });",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/scan/status/{{workflow_job_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"scan",
+										"status",
+										"{{workflow_job_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "3. Get Results (when completed)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    pm.test(\"Results retrieved successfully\", function () {",
+											"        var jsonData = pm.response.json();",
+											"        pm.expect(jsonData).to.have.property('companies');",
+											"        pm.expect(jsonData).to.have.property('deals');",
+											"        pm.expect(jsonData).to.have.property('pipelines');",
+											"        ",
+											"        console.log(`Extracted: ${jsonData.companies.length} companies, ${jsonData.deals.length} deals, ${jsonData.pipelines.length} pipelines`);",
+											"    });",
+											"} else if (pm.response.code === 404) {",
+											"    pm.test(\"Job not completed yet\", function () {",
+											"        console.log('Job not completed yet or results not available');",
+											"    });",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/scan/result/{{workflow_job_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"scan",
+										"result",
+										"{{workflow_job_id}}"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "4. Cleanup - Delete Job",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Cleanup successful\", function () {",
+											"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+											"});",
+											"",
+											"if (pm.response.code === 200) {",
+											"    console.log('Job and associated data deleted successfully');",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/scan/remove/{{workflow_job_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"scan",
+										"remove",
+										"{{workflow_job_id}}"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"console.log(`Making request to: ${pm.request.url}`);",
+					"",
+					"// Check if required environment variables are set",
+					"if (!pm.environment.get('base_url')) {",
+					"    console.warn('base_url environment variable not set');",
+					"}",
+					"",
+					"if (!pm.environment.get('hubspot_api_token')) {",
+					"    console.warn('hubspot_api_token environment variable not set');",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"pm.test(\"Response time is acceptable\", function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(30000);",
+					"});",
+					"",
+					"pm.test(\"Response has correct content type\", function () {",
+					"    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+					"});",
+					"",
+					"// Log response for debugging",
+					"if (pm.response.code >= 400) {",
+					"    console.log(`Error Response (${pm.response.code}): ${pm.response.text()}`);",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "api_version",
+			"value": "v1",
+			"type": "string"
+		},
+		{
+			"key": "collection_version",
+			"value": "1.0.0",
+			"type": "string"
+		}
+	]
+}
