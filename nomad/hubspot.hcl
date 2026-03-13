@@ -15,9 +15,11 @@ job "hubspot-company" {
       driver = "docker"
 
       config {
-        image = "YOUR_DOCKERHUB_USERNAME/hubspot-company:latest"
+        image = "lleans/hubspot-company:latest"
         ports = ["http"]
         force_pull = true
+	dns_servers = ["${attr.unique.network.ip-address}"]
+        dns_search_domains = ["service.consul"]
       }
 
       env {
