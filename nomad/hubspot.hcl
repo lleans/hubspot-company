@@ -21,9 +21,11 @@ job "hubspot-company" {
       }
 
       env {
-        PORT         = "3012"
-        LOG_LEVEL    = "INFO"
-        DATABASE_URL = "postgresql://hubspot:hubspot123@${attr.unique.network.ip-address}:5432/hubspot_db"
+	  DATABASE_URL = "postgresql://hubspot:hubspot123@postgres.service.consul:5432/hubspot_db"
+          PORT = "3012"
+          LOG_LEVEL = "INFO"
+          MAX_WORKER_THREADS = "5"
+          FLASK_ENV = "staging"
       }
 
       resources {
