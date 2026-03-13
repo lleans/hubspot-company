@@ -26,23 +26,28 @@ jobs:
           push: true
           tags: ${{ secrets.REGISTRY_USER }}/hubspot-company:latest
 
-      - name: Deploy PostgreSQL to Nomad
+      - name: Install Nomad CLI
         run: |
-          curl -s -X POST ${{ secrets.NOMAD_ADDR }}/v1/jobs \
-            -H "Content-Type: application/json" \
-            -d "{\"Job\": $(nomad job run -output nomad/postgres.hcl)}"
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install nomad -y
+
+      - name: Deploy PostgreSQL to Nomad
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+        run: |
+          nomad job run nomad/postgres.hcl
 
       - name: Deploy App to Nomad
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
         run: |
-          # Replace placeholder with actual Docker Hub username
           sed -i "s/YOUR_DOCKERHUB_USERNAME/${{ secrets.REGISTRY_USER }}/g" nomad/hubspot.hcl
-          
-          curl -s -X POST ${{ secrets.NOMAD_ADDR }}/v1/jobs \
-            -H "Content-Type: application/json" \
-            -d "{\"Job\": $(nomad job run -output nomad/hubspot.hcl)}"
+          nomad job run nomad/hubspot.hcl
 
       - name: Verify deployment
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
         run: |
-          sleep 15
-          curl -f ${{ secrets.NOMAD_ADDR }}/v1/job/hubspot-company \
-            | python3 -c "import sys,json; j=json.load(sys.stdin); print('Status:', j.get('Status'))"
+          sleep 20
+          nomad job status hubspot-company
